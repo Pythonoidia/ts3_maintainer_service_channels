@@ -1,25 +1,26 @@
 import logging
-
+import configuration
+import requests
 from common import from_days_to_seconds, from_seconds_to_days
 
 
 class ChannelsMaintanance(object):
-    def __init__(self, ts3conn, quarantine_begin_time, quarantine_time):
+    def __init__(self, quarantine_begin_time, quarantine_time):
         '''
         ts3conn - ts3.query.TS3Connection
         quarantine_begin_time - time in days after which the channels should be moved to quarantine
         quarantine_time - time in days before delatation of the channel which is inside quarantine
         '''
-        self.conn = ts3conn
         self.qtime = from_days_to_seconds(quarantine_begin_time)
         self.deletation_time = from_days_to_seconds(quarantine_begin_time + quarantine_time)
-
+        self.connection = 'http://193.70.3.178:7600/'
+        self.password = configuration.auth_pwd
+        self.username = configuration.auth_user
 
     def check_channels(self):
-        channels = self.conn.channellist()
+        channels = requests.get('{}channel'.format(self.connection), auth=(self.username, self.password)).json()
         for channel in channels:
             self.check_channel(channel, channels)
-
 
 
     def check_channel(self, channel, channels):
@@ -73,3 +74,10 @@ class ChannelsMaintanance(object):
             logging.debug('already in quarantine')
             return 1
 
+def main():
+    chan = ChannelsMaintanance(3, 10)
+    chan.check_channels()
+
+
+if __name__ == '__main__':
+    main()
