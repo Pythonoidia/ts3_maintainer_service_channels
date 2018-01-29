@@ -11,30 +11,40 @@ class ChannelsMaintanance(object):
         quarantine_begin_time - time in days after which the channels should be moved to quarantine
         quarantine_time - time in days before delatation of the channel which is inside quarantine
         '''
-        self.qtime = from_days_to_seconds(quarantine_begin_time)
+        self.qtime = from_seconds_to_days(quarantine_begin_time)
         self.deletation_time = from_days_to_seconds(quarantine_begin_time + quarantine_time)
-        self.connection = 'http://193.70.3.178:7600/'
+        self.connection = 'http://193.70.3.178:9652/'
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
 
-    def check_channels(self):
-        channels = requests.get('{}channel'.format(self.connection), auth=(self.username, self.password)).json()
+    def channels_list(self):
+        channels = requests.get('{}channels'.format(self.connection), auth=(self.username, self.password)).json()
+        channels_list = []
         for channel in channels:
-            self.check_channel(channel, channels)
+            channels_list.append(channel)
+        return channels_list
 
 
-    def check_channel(self, channel, channels):
-            if channel['total_clients'] == '0':
-                if not self.has_children(channel, channels):
-                    if self.is_quarantine_time(channel):
-                        if not self.in_quarantine(channel):
-                            old_topic = self.conn.channelinfo(cid=channel['cid'])[0]['channel_topic']
-                            logging.debug('Channel going to quarantine: '+ channel['channel_name'])
-                            self.conn.channeledit(cid=channel['cid'], channel_topic='quarantine|'+old_topic)
-                        else:
-                            self.might_be_removed(channel)
-                    #else:
-                        #check if channel might be moved from quarantine to normal state
+    def channel_detailed_information(self):
+        channels_list = self.channels_list()
+        channels_info = []
+        for channel in channels_list:
+            print(channel)
+            channels_info.append((requests.get('{}channels/{}'.format(self.connection, channel["cid"]), auth=(self.username, self.password)).json()))
+        return channels_info
+
+
+    def channels_to_quarantine(self):
+        channels_info = self.channel_detailed_information()
+        for channels in channels_info:
+            for channel in channels:
+                print(channel)
+                if int(channel['seconds_empty']) > self.qtime:
+                    '''
+                    Point is i need Cid which is in channels_list
+                    '''
+                    print("we got this")
+
 
     def might_be_removed(self, channel):
         if not self.protected(channel):
@@ -75,9 +85,9 @@ class ChannelsMaintanance(object):
             return 1
 
 def main():
-    chan = ChannelsMaintanance(3, 10)
-    chan.check_channels()
-
+    chan = ChannelsMaintanance(0.01, 10)
+    print(chan.channel_detailed_information())
+    #print(chan.channels_to_quarantine())
 
 if __name__ == '__main__':
     main()
