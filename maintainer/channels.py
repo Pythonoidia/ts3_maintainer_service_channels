@@ -27,23 +27,18 @@ class ChannelsMaintanance(object):
 
     def channel_detailed_information(self):
         channels_list = self.channels_list()
-        channels_info = []
+        channels_info = {}
         for channel in channels_list:
-            print(channel)
-            channels_info.append((requests.get('{}channels/{}'.format(self.connection, channel["cid"]), auth=(self.username, self.password)).json()))
+            channels_info[channel["cid"]] = requests.get('{}channels/{}'.format(self.connection,channel["cid"]), auth=(self.username, self.password)).json()
         return channels_info
 
 
     def channels_to_quarantine(self):
         channels_info = self.channel_detailed_information()
         for channels in channels_info:
-            for channel in channels:
-                print(channel)
-                if int(channel['seconds_empty']) > self.qtime:
-                    '''
-                    Point is i need Cid which is in channels_list
-                    '''
-                    print("we got this")
+            for channel in channels_info[channels]:
+                if int(channel["seconds_empty"]) > self.qtime:
+                    print(channels, channel["seconds_empty"])
 
 
     def might_be_removed(self, channel):
@@ -86,8 +81,8 @@ class ChannelsMaintanance(object):
 
 def main():
     chan = ChannelsMaintanance(0.01, 10)
-    print(chan.channel_detailed_information())
-    #print(chan.channels_to_quarantine())
+    #print(chan.channel_detailed_information())
+    print(chan.channels_to_quarantine())
 
 if __name__ == '__main__':
     main()
