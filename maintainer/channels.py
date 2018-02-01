@@ -24,22 +24,21 @@ class ChannelsMaintanance(object):
             channels_list.append(channel)
         return channels_list
 
-
     def channel_detailed_information(self):
         channels_list = self.channels_list()
         channels_info = {}
         for channel in channels_list:
-            channels_info[channel["cid"]] = requests.get('{}channels/{}'.format(self.connection,channel["cid"]), auth=(self.username, self.password)).json()
+            channels_info[channel["cid"]] = requests.get('{}channels/{}'.format(self.connection, channel["cid"]), auth=(self.username, self.password)).json()
         return channels_info
-
 
     def channels_to_quarantine(self):
         channels_info = self.channel_detailed_information()
         for channels in channels_info:
             for channel in channels_info[channels]:
                 if int(channel["seconds_empty"]) > self.qtime:
+                    payload = {'channel_topic':'quarantine'}
                     print(channels, channel["seconds_empty"])
-
+                    requests.post('{}channels/{}/topic'.format(self.connection, channels), auth=(self.username, self.password), data = payload)
 
     def might_be_removed(self, channel):
         if not self.protected(channel):
