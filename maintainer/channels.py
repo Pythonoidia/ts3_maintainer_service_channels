@@ -39,31 +39,21 @@ class ChannelsMaintanance(object):
                     payload = {'channel_topic':'quarantine'}
                     print(channels, channel["seconds_empty"])
                     requests.post('{}channels/{}/topic'.format(self.connection, channels), auth=(self.username, self.password), data = payload)
+        return 1
 
-    def might_be_removed(self, channel):
-        if not self.protected(channel):
-            if self.is_deletation_time(channel):
-                #self.comm.gm('Going to be removed: '+ channel['channel_name'])
-                print('Going to be removed: '+ channel['channel_name'])
-                self.conn.channeldelete(cid=channel['cid'], force=0)
-
-    def protected(self, channel):
-         if 'protected|' in self.conn.channelinfo(cid=channel['cid'])[0]['channel_topic']:
-             logging.debug('Channel: '+channel['channel_name']+' is protected, so it will not be removed!')
-             return 1
-
-    def is_deletation_time(self, channel):
-        info = self.conn.channelinfo(cid=channel['cid'])[0]
-        if int(info['seconds_empty']) > self.deletation_time:
-            logging.debug('Channel: '+ channel['channel_name']+ ' is going to be removed, as was not used for: '+ str(from_seconds_to_days(info['seconds_empty'])) + ' days')
-            return 1
-
-
-    def is_quarantine_time(self, channel):
-        info = self.conn.channelinfo(cid=channel['cid'])[0]
-        if int(info['seconds_empty']) > self.qtime or int(info['seconds_empty']) < 0:
-            logging.debug('Channel: '+ channel['channel_name']+ ' was not used in past: '+ str(from_seconds_to_days(info['seconds_empty'])) + ' days')
-            return 1
+    def might_be_removed(self):
+        '''
+        My problem at this moment is that commented lines are deleting
+        parent and children if they are innactive, instead of deleting
+        only children.
+        '''
+        channels_data = self.channel_detailed_information()
+        for channels in channels_data:
+            for channel in channels_data[channels]:
+                print(channel)
+                #if channel["channel_topic"] != 'protected' and int(channel["seconds_empty"]) > self.qtime:
+                    #requests.delete('{}/channels/{}'.format(self.connection, channels), auth=(self.username, self.password))
+        '''self.conn.channeldelete(cid=channel['cid'], force=0)'''
 
     def has_children(self, parent, channels):
         for channel in channels:
@@ -73,15 +63,11 @@ class ChannelsMaintanance(object):
         else:
             return 0
 
-    def in_quarantine(self, channel):
-        if 'quarantine|' in self.conn.channelinfo(cid=channel['cid'])[0]['channel_topic']:
-            logging.debug('already in quarantine')
-            return 1
-
 def main():
     chan = ChannelsMaintanance(0.01, 10)
     #print(chan.channel_detailed_information())
-    print(chan.channels_to_quarantine())
+    #print(chan.channels_to_quarantine())
+    print(chan.might_be_removed())
 
 if __name__ == '__main__':
     main()
