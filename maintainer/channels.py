@@ -41,19 +41,21 @@ class ChannelsMaintanance(object):
                     requests.post('{}channels/{}/topic'.format(self.connection, channels), auth=(self.username, self.password), data = payload)
         return 1
 
-    def might_be_removed(self):
-        '''
-        My problem at this moment is that commented lines are deleting
-        parent and children if they are innactive, instead of deleting
-        only children.
-        '''
+    def might_be_removed_parent(self):
         channels_data = self.channel_detailed_information()
         for channels in channels_data:
             for channel in channels_data[channels]:
-                print(channel)
-                #if channel["channel_topic"] != 'protected' and int(channel["seconds_empty"]) > self.qtime:
-                    #requests.delete('{}/channels/{}'.format(self.connection, channels), auth=(self.username, self.password))
-        '''self.conn.channeldelete(cid=channel['cid'], force=0)'''
+                if channel["channel_topic"] != 'protected' and int(channel["seconds_empty"]) > self.qtime:
+                    print("in the loop")
+                    requests.delete('{}/channels/{}'.format(self.connection, channels), auth=(self.username, self.password))
+
+    def might_be_removed_children(self):
+        channels_data = self.channel_detailed_information()
+        for channels in channels_data:
+            for channel in channels_data[channels]:
+                if channel["channel_topic"] != 'protected' and int(channel["seconds_empty"]) > self.qtime and channel["pid"] == channels:
+                    requests.delete('{}/channels/{}'.format(self.connection, channels), auth=(self.username, self.password))
+                    return done
 
     def has_children(self, parent, channels):
         for channel in channels:
@@ -67,7 +69,7 @@ def main():
     chan = ChannelsMaintanance(0.01, 10)
     #print(chan.channel_detailed_information())
     #print(chan.channels_to_quarantine())
-    print(chan.might_be_removed())
-
+    chan.might_be_removed_children()
+    #chan.might_be_removed_parent()
 if __name__ == '__main__':
     main()
