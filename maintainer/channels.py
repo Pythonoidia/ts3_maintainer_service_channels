@@ -1,125 +1,136 @@
-import logging
-import configuration
 import requests
-from common import from_days_to_seconds, from_seconds_to_days
+import configuration
 
 
 class ChannelsMaintanance(object):
-    def __init__(self, quarantine_begin_time, quarantine_time):
+    '''
+    Class is using Teamspeak API in order to maintain channels
+    which are not used.
+    '''
+    def __init__(self, qtime=100):
         '''
-        ts3conn - ts3.query.TS3Connection
-        quarantine_begin_time - time in days after which the channels should be moved to quarantine
-        quarantine_time - time in days before delatation of the channel which is inside quarantine
+        Input:
+            qtime = it is time in seconds after which we are taking steps:
+                first - we are putting quarantine status in channel_topic
+                second - after same amount of time if channel_topic is quarantined
+                we are deleting this channel
+        Init doesn't return anything
         '''
-        self.qtime = 100
-        #self.qtime = from_seconds_to_days(quarantine_begin_time)
-        self.deletation_time = from_days_to_seconds(quarantine_begin_time + quarantine_time)
+        self.qtime = qtime
         self.connection = 'http://193.70.3.178:9652/'
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
 
-    def channels_list(self):
-        channels = requests.get('{}channels'.format(self.connection), auth=(self.username, self.password)).json()
-        channels_list = []
+    def channels_basic_info(self):
+        '''
+        Method is used for getting basic information about every channel on server.
+        In details it tells us names of channels, how many users are on specific
+        channels, and channel_id with parent_id.
+        There is no input value from outside of class.
+        Output: channels_basic_info as list of dictionaries.
+        '''
+        channels = requests.get('{}channels'.format(
+            self.connection), auth=(self.username, self.password)).json()
+        channels_basic_info = []
         for channel in channels:
-            channels_list.append(channel)
-        return channels_list
+            channels_basic_info.append(channel)
+        return channels_basic_info
 
     def channels_detailed_information(self):
-        channels_list = self.channels_list()
-        channels_info = {}
-        for channel in channels_list:
-            channels_info[channel["cid"]] = requests.get('{}channels/{}'.format(self.connection, channel["cid"]), auth=(self.username, self.password)).json()
-        return channels_info
+        '''
+        Method is returning more data than channels_basic_info method.
+        In this method we are receiving important data such as: channel_topic
+        or seconds_empty that allow us to see if there is any status written
+        into topic or if channel is used at all.
+        There is no input value from outside of class.
+        Output: channels_detailed_info as dictionary of dictionaries in form of:
+            cid: detailed_info of one channel
+        '''
+        channels_basic_info = self.channels_basic_info()
+        channels_detailed_info = {}
+        for channel in channels_basic_info:
+            channels_detailed_info[channel["cid"]] = requests.get(
+                '{}channels/{}'.format(self.connection, channel["cid"]), auth=(
+                    self.username, self.password)).json()
+        return channels_detailed_info
 
     def channels_to_quarantine(self):
-        channels_info = self.channel_detailed_information()
-        for channels in channels_info:
-            for channel in channels_info[channels]:
+        '''
+        Method is using channels_detailed_information for getting seconds_empty
+        and channel_topic values in order to specify if there should be put
+        status of quarantine on channels that meet certain condition.
+        There is no input taken from outside of class.
+        Output: Method is returning short information that it found channels
+        that needed attention.
+        '''
+        channels_detailed_info = self.channels_detailed_information()
+        for channels in channels_detailed_info:
+            for channel in channels_detailed_info[channels]:
                 if int(channel["seconds_empty"]) > self.qtime:
-                    payload = {'channel_topic':'quarantine'}
+                    payload = {'channel_topic': 'quarantine'}
                     print(channels, channel["seconds_empty"])
-                    requests.post('{}channels/{}/topic'.format(self.connection, channels), auth=(self.username, self.password), data = payload)
-        return 1
+                    requests.post('{}channels/{}/topic'.format(self.connection, channels), auth=(
+                        self.username, self.password), data=payload)
+                    return "found channels that meet condition"
 
-    def might_be_removed_parent(self):
-        channels_data = self.channel_detailed_information()
+    def delete_parents(self):
+        '''
+        Method is used to delete channels that are parents to other channels.
+        We are using this method after delete_children because it deletes
+        children of parent as well.
+        There is no input taken from outside of class.
+        Output: short information which parent channels were deleted.
+
+        '''
+        channels_data = self.channels_detailed_information()
         for channels in channels_data:
+            print(channels)
             for channel in channels_data[channels]:
-                if channel["channel_topic"] != 'protected' and int(channel["seconds_empty"]) > self.qtime:
-                    print("in the loop")
-                    requests.delete('{}/channels/{}'.format(self.connection, channels), auth=(self.username, self.password))
+                if channel["channel_topic"] != 'protected' and channel["channel_topic"] == 'quarantine' and int(channel["seconds_empty"]) > self.qtime:
+                    requests.delete('{}/channels/{}'.format(
+                        self.connection, channels), auth=(self.username, self.password))
+                    return "deleted channels {}".format(channels)
 
-    def might_be_removed_children(self):
-        channels_data = self.channels_detailed_information()
-        for cid in channels_data:
-            for channel_id in channels_data:
-                if channels_data[channel_id]['pid'] == cid:
-                    '''
-                    Czemu wykorzystany jest cid z pierwszego fora skoro mozna sciagnac channel_id
-                    z drugiego, de facto mozna pozbyc sie jednego fora?
-                    Czy ta struktura jest zrobiona wlasnie na potrzeby kompletnego sprawdzenia danych?
-                    Mam tu na mysli majac pelen komplet cid po zakonczeniu pracy jednej petli sprawdzamy
-                    na biezaco pid w drugiej petli?
-                    '''
-                    print('To jest id dziecka:', channel_id, 'dla kanalu: ', cid)
-            #print('cid:', cid, 'pid:', channel_data['pid'], channel_data["channel_name"])
-            #if 'protected' in channel_data["channel_topic"] and int(channel_data["seconds_empty"]) > self.qtime and cid == channel_data["pid"]:
-            #    print("found match")
-                   #requests.delete('{}/channels/{}'.format(self.connection, channels), auth=(self.username, self.password))
-                    #return 'done'
-
-    def another_removed(self):
-        #to podejscie daje mi jedynie CID kanalow ktore na pewno sa rodzicami
-        #jest to bledne podejscie ale mozna z tego zrobic metode ktora zwraca liste
-        #rodzicow ktorzy istnieja na serwerze
+    def delete_children(self):
+        '''
+        Method is used for deleting channels that are having children status.
+        There is no input taken from outside of class.
+        Output we are receiving list of children channels deleted by method.
         '''
         channels_data = self.channels_detailed_information()
-        cid_list = []
-        pid_list = []
+        children_list = self.list_of_children()
         for cid in channels_data:
-            cid_list.append(cid)
-            pid_list.append(channels_data[cid]["pid"])
-        print(cid_list, pid_list)
-        return set(pid_list).intersection(cid_list)
-        '''
+            if cid in children_list:
+                if int(channels_data[cid]["seconds_empty"]) > self.qtime and channels_data[
+                        cid]["channel_topic"] != 'protected' or 'Default Channel has no topic' and channels_data[
+                            cid]["channel_topic"] == 'quarantine':
+                    requests.delete('{}/channels/{}'.format(
+                        self.connection, cid), auth=(self.username, self.password))
+                    return "deleted children channels {}".format(children_list)
 
-        #tak powinna wygladac funkcja zwracajaca liste dzieci
-        #nie do tego daze ale mozna to wykorzystac jako osobny modul
+    def list_of_children(self):
+        '''
+        Method is used for getting list of children channels on server.
+        This method is not receiving any input.
+        Output: list of children channels with INTs inside.
+        '''
         channels_data = self.channels_detailed_information()
         child_list = []
         for cid in channels_data:
             for channel_id in channels_data:
                 if channels_data[channel_id]["pid"] == cid:
                     child_list.append(channel_id)
-        print(child_list)
+        return child_list
 
-
-    def has_children(self, parent, channels):
-        for channel in channels:
-            if channel['pid'] == parent['cid']:
-                logging.debug('Parent: '+parent['channel_name']+' has child: '+ str(channel['channel_name']))
-                return 1
-        else:
-            return 0
 
 def main():
-    chan = ChannelsMaintanance(9, 10)
-    #print(chan.channel_detailed_information())
-    #print(chan.channels_to_quarantine())
-    print(chan.might_be_removed_children())
-    print(chan.another_removed())
-    #chan.might_be_removed_parent()
+    '''
+    Main is used only in order to debug and show basic functionality of this
+    Module.
+    '''
+    chan = ChannelsMaintanance(9)
+    #chan.delete_children()
+    chan.delete_parents()
+
 if __name__ == '__main__':
     main()
-
-
-'''
-
-1. check if channel topic is default
-2. check if channel topic has "protected" in it.
-3. check if channel did not have any user for 7 days. (and add quarantine to topic)
-4. check if channel has childs. it means that we have to check every channel if it has this channel as a parent.
-
-'''
-
