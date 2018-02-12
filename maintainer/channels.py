@@ -80,13 +80,14 @@ class ChannelsMaintanance(object):
         children of parent as well.
         There is no input taken from outside of class.
         Output: short information which parent channels were deleted.
-
         '''
         channels_data = self.channels_detailed_information()
         for channels in channels_data:
-            print(channels)
             for channel in channels_data[channels]:
-                if channel["channel_topic"] != 'protected' and channel["channel_topic"] == 'quarantine' and int(channel["seconds_empty"]) > self.qtime:
+                #there is problem with this iteration, channels despite their look are str not int, i dont know how to change that efficiently
+                if channel["channel_topic"] != 'protected' and channel[
+                        "channel_topic"] == 'quarantine' and int(
+                            channel["seconds_empty"]) > self.qtime:
                     requests.delete('{}/channels/{}'.format(
                         self.connection, channels), auth=(self.username, self.password))
                     return "deleted channels {}".format(channels)
