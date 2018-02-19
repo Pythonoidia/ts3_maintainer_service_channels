@@ -10,8 +10,9 @@ class ChannelsMaintanance(object):
     def __init__(self, qtime=100):
         '''
         Input:
-            qtime = it is time in seconds after which we are taking steps:
-                first - we are putting quarantine status in channel_topic
+            qtime = time in seconds after which we are taking steps:
+                #todo fix below
+                first - quarantine status in channel_topic
                 second - after same amount of time if channel_topic is quarantined
                 we are deleting this channel
         Init doesn't return anything
@@ -21,16 +22,26 @@ class ChannelsMaintanance(object):
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
 
+    def _requests_get(self, endpoint):
+        return requests.get('{}{}'.format(
+            self.connection, endpoint), auth=(self.username, self.password)).json()
+
+    def _requests_delete(self, endpoint):
+        requests.delete('{}{}'.format(
+                self.connection, endpoint), auth=(self.username, self.password))
+
+    def _requests_post(self, endpoint, payload):
+        requests.post('{}{}'.format(self.connection, endpoint), auth=(
+            self.username, self.password), data=payload)
+
     def channels_basic_info(self):
         '''
-        Method is used for getting basic information about every channel on server.
+        Get basic information about every channel on server.
         In details it tells us names of channels, how many users are on specific
         channels, and channel_id with parent_id.
-        There is no input value from outside of class.
         Output: channels_basic_info as list of dictionaries.
         '''
-        channels = requests.get('{}channels'.format(
-            self.connection), auth=(self.username, self.password)).json()
+        channels = self._requests_get('channels')
         channels_basic_info = []
         for channel in channels:
             channels_basic_info.append(channel)
@@ -49,9 +60,8 @@ class ChannelsMaintanance(object):
         channels_basic_info = self.channels_basic_info()
         channels_detailed_info = {}
         for channel in channels_basic_info:
-            channels_detailed_info[channel["cid"]] = requests.get(
-                '{}channels/{}'.format(self.connection, channel["cid"]), auth=(
-                    self.username, self.password)).json()
+            channels_detailed_info[channel["cid"]] = self._requests_get(
+                'channels/{}'.format(channel["cid"]))
         return channels_detailed_info
 
     def channels_to_quarantine(self):
@@ -64,14 +74,12 @@ class ChannelsMaintanance(object):
         that needed attention.
         '''
         channels_detailed_info = self.channels_detailed_information()
-        for channels in channels_detailed_info:
-            for channel in channels_detailed_info[channels]:
-                if int(channel["seconds_empty"]) > self.qtime:
-                    payload = {'channel_topic': 'quarantine'}
-                    print(channels, channel["seconds_empty"])
-                    requests.post('{}channels/{}/topic'.format(self.connection, channels), auth=(
-                        self.username, self.password), data=payload)
-                    return "found channels that meet condition"
+        for channel_id in channels_detailed_info:
+            channel = channels_detailed_info[channel_id][0]
+            if int(channel["seconds_empty"]) > self.qtime:
+                payload = {'channel_topic': 'quarantine'}
+                self._requests_post('channels/{}/topic'.format(channel_id), payload)
+                return "found channels that meet condition"
 
     def delete_parents(self):
         '''
@@ -82,15 +90,13 @@ class ChannelsMaintanance(object):
         Output: short information which parent channels were deleted.
         '''
         channels_data = self.channels_detailed_information()
-        for channels in channels_data:
-            for channel in channels_data[channels]:
-                #there is problem with this iteration, channels despite their look are str not int, i dont know how to change that efficiently
-                if channel["channel_topic"] != 'protected' and channel[
-                        "channel_topic"] == 'quarantine' and int(
-                            channel["seconds_empty"]) > self.qtime:
-                    requests.delete('{}/channels/{}'.format(
-                        self.connection, channels), auth=(self.username, self.password))
-                    return "deleted channels {}".format(channels)
+        for channel_id in channels_data:
+            channel = channels_data[channel_id][0]
+            if channel["channel_topic"] != 'protected' and channel[
+                    "channel_topic"] == 'quarantine' and int(
+                        channel["seconds_empty"]) > self.qtime:
+                            self._requests_delete('channels/{}'.format(channel_id))
+            return "deleted channels {}".format(channel_id)
 
     def delete_children(self):
         '''
@@ -132,6 +138,7 @@ def main():
     chan = ChannelsMaintanance(9)
     #chan.delete_children()
     chan.delete_parents()
+    print(chan.channels_detailed_information())
 
 if __name__ == '__main__':
     main()
