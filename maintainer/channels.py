@@ -7,7 +7,7 @@ class ChannelsMaintanance(object):
     Class is using Teamspeak API in order to maintain channels
     which are not used.
     '''
-    def __init__(self, qtime=100):
+    def __init__(self, qtime=2):
         '''
         Input:
             qtime = time in seconds after which we are taking steps:
@@ -75,11 +75,11 @@ class ChannelsMaintanance(object):
         '''
         channels_detailed_info = self.channels_detailed_information()
         for channel_id in channels_detailed_info:
-            channel = channels_detailed_info[channel_id][0]
+            channel = channels_detailed_info[channel_id]
             if int(channel["seconds_empty"]) > self.qtime:
                 payload = {'channel_topic': 'quarantine'}
                 self._requests_post('channels/{}/topic'.format(channel_id), payload)
-                return "found channels that meet condition"
+        return "quarantined {}".format(payload)
 
     def delete_parents(self):
         '''
@@ -91,7 +91,8 @@ class ChannelsMaintanance(object):
         '''
         channels_data = self.channels_detailed_information()
         for channel_id in channels_data:
-            channel = channels_data[channel_id][0]
+            print(channel_id)
+            channel = channels_data[channel_id]
             if channel["channel_topic"] != 'protected' and channel[
                     "channel_topic"] == 'quarantine' and int(
                         channel["seconds_empty"]) > self.qtime:
@@ -113,7 +114,7 @@ class ChannelsMaintanance(object):
                             cid]["channel_topic"] == 'quarantine':
                     requests.delete('{}/channels/{}'.format(
                         self.connection, cid), auth=(self.username, self.password))
-                    return "deleted children channels {}".format(children_list)
+                    return "deleted children channel {}".format(cid)
 
     def list_of_children(self):
         '''
@@ -135,10 +136,10 @@ def main():
     Main is used only in order to debug and show basic functionality of this
     Module.
     '''
-    chan = ChannelsMaintanance(9)
-    #chan.delete_children()
+    chan = ChannelsMaintanance()
+    chan.channels_to_quarantine()
+    chan.delete_children()
     chan.delete_parents()
-    print(chan.channels_detailed_information())
 
 if __name__ == '__main__':
     main()
