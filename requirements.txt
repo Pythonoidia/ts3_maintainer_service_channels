@@ -1,3 +1,2 @@
-blinker==1.4
-ts3==0.6.7
-wheel==0.24.0
+requests
+unittest

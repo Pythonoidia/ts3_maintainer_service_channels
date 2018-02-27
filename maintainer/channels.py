@@ -1,24 +1,20 @@
+import logging
 import requests
 import configuration
-
+from common import from_days_to_seconds
 
 class ChannelsMaintanance(object):
-    '''
-    Class is using Teamspeak API in order to maintain channels
-    which are not used.
-    '''
     def __init__(self, qtime=2):
         '''
         Input:
-            qtime = time in seconds after which we are taking steps:
-                #todo fix below
-                first - quarantine status in channel_topic
+            qtime = time in days after which we are taking steps:
+                first - we are changing topic of channel to "quarantine" in order to
+                mark it as qualified to deleting it in future
                 second - after same amount of time if channel_topic is quarantined
                 we are deleting this channel
-        Init doesn't return anything
         '''
-        self.qtime = qtime
-        self.connection = 'http://193.70.3.178:9652/'
+        self.qtime = from_days_to_seconds(qtime)
+        self.connection = configuration.url
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
 
@@ -28,7 +24,7 @@ class ChannelsMaintanance(object):
 
     def _requests_delete(self, endpoint):
         requests.delete('{}{}'.format(
-                self.connection, endpoint), auth=(self.username, self.password))
+            self.connection, endpoint), auth=(self.username, self.password))
 
     def _requests_post(self, endpoint, payload):
         requests.post('{}{}'.format(self.connection, endpoint), auth=(
@@ -37,7 +33,7 @@ class ChannelsMaintanance(object):
     def channels_basic_info(self):
         '''
         Get basic information about every channel on server.
-        In details it tells us names of channels, how many users are on specific
+        In details it tells us names of channels, how many users are on different
         channels, and channel_id with parent_id.
         Output: channels_basic_info as list of dictionaries.
         '''
@@ -69,41 +65,36 @@ class ChannelsMaintanance(object):
         Method is using channels_detailed_information for getting seconds_empty
         and channel_topic values in order to specify if there should be put
         status of quarantine on channels that meet certain condition.
-        There is no input taken from outside of class.
-        Output: Method is returning short information that it found channels
-        that needed attention.
+        Method is returning log in which we can see which channel is quarantined
+        by it.
         '''
         channels_detailed_info = self.channels_detailed_information()
         for channel_id in channels_detailed_info:
             channel = channels_detailed_info[channel_id]
-            if int(channel["seconds_empty"]) > self.qtime:
+            if int(channel["seconds_empty"]) > self.qtime and channel[
+                    "channel_topic"] != 'protected':
                 payload = {'channel_topic': 'quarantine'}
                 self._requests_post('channels/{}/topic'.format(channel_id), payload)
-        return "quarantined {}".format(payload)
+                return logging.log("quarantined channel: {}".format(channel_id))
 
     def delete_parents(self):
         '''
         Method is used to delete channels that are parents to other channels.
         We are using this method after delete_children because it deletes
         children of parent as well.
-        There is no input taken from outside of class.
         Output: short information which parent channels were deleted.
         '''
         channels_data = self.channels_detailed_information()
         for channel_id in channels_data:
-            print(channel_id)
             channel = channels_data[channel_id]
-            if channel["channel_topic"] != 'protected' and channel[
-                    "channel_topic"] == 'quarantine' and int(
-                        channel["seconds_empty"]) > self.qtime:
-                            self._requests_delete('channels/{}'.format(channel_id))
-            return "deleted channels {}".format(channel_id)
+            if channel["channel_topic"] != 'protected' and channel["channel_topic"] == 'quarantine' and int(channel["seconds_empty"]) > self.qtime:
+                self._requests_delete('channels/{}'.format(channel_id))
+            return logger.log("deleted channels {}".format(channel_id))
 
     def delete_children(self):
         '''
         Method is used for deleting channels that are having children status.
-        There is no input taken from outside of class.
-        Output we are receiving list of children channels deleted by method.
+        Output: deleted children channel
         '''
         channels_data = self.channels_detailed_information()
         children_list = self.list_of_children()
@@ -114,13 +105,11 @@ class ChannelsMaintanance(object):
                             cid]["channel_topic"] == 'quarantine':
                     requests.delete('{}/channels/{}'.format(
                         self.connection, cid), auth=(self.username, self.password))
-                    return "deleted children channel {}".format(cid)
+                    return logging.log("deleted children channel {}".format(cid))
 
     def list_of_children(self):
         '''
         Method is used for getting list of children channels on server.
-        This method is not receiving any input.
-        Output: list of children channels with INTs inside.
         '''
         channels_data = self.channels_detailed_information()
         child_list = []
@@ -131,15 +120,3 @@ class ChannelsMaintanance(object):
         return child_list
 
 
-def main():
-    '''
-    Main is used only in order to debug and show basic functionality of this
-    Module.
-    '''
-    chan = ChannelsMaintanance()
-    chan.channels_to_quarantine()
-    chan.delete_children()
-    chan.delete_parents()
-
-if __name__ == '__main__':
-    main()
