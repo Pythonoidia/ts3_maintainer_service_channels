@@ -3,6 +3,7 @@ import requests
 import configuration
 from common import from_days_to_seconds
 
+
 class ChannelsMaintanance(object):
     def __init__(self, qtime=2):
         '''
@@ -14,20 +15,20 @@ class ChannelsMaintanance(object):
                 we are deleting this channel
         '''
         self.qtime = from_days_to_seconds(qtime)
-        self.connection = configuration.url
+        self.endpoint = configuration.url
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
 
     def _requests_get(self, endpoint):
         return requests.get('{}{}'.format(
-            self.connection, endpoint), auth=(self.username, self.password)).json()
+            self.endpoint, endpoint), auth=(self.username, self.password)).json()
 
     def _requests_delete(self, endpoint):
         requests.delete('{}{}'.format(
-            self.connection, endpoint), auth=(self.username, self.password))
+            self.endpoint, endpoint), auth=(self.username, self.password))
 
     def _requests_post(self, endpoint, payload):
-        requests.post('{}{}'.format(self.connection, endpoint), auth=(
+        requests.post('{}{}'.format(self.endpoint, endpoint), auth=(
             self.username, self.password), data=payload)
 
     def channels_basic_info(self):
@@ -65,8 +66,6 @@ class ChannelsMaintanance(object):
         Method is using channels_detailed_information for getting seconds_empty
         and channel_topic values in order to specify if there should be put
         status of quarantine on channels that meet certain condition.
-        Method is returning log in which we can see which channel is quarantined
-        by it.
         '''
         channels_detailed_info = self.channels_detailed_information()
         for channel_id in channels_detailed_info:
@@ -75,7 +74,7 @@ class ChannelsMaintanance(object):
                     "channel_topic"] != 'protected':
                 payload = {'channel_topic': 'quarantine'}
                 self._requests_post('channels/{}/topic'.format(channel_id), payload)
-                return logging.log("quarantined channel: {}".format(channel_id))
+                logging.debug("quarantined channel: {}".format(channel_id))
 
     def delete_parents(self):
         '''
@@ -89,12 +88,12 @@ class ChannelsMaintanance(object):
             channel = channels_data[channel_id]
             if channel["channel_topic"] != 'protected' and channel["channel_topic"] == 'quarantine' and int(channel["seconds_empty"]) > self.qtime:
                 self._requests_delete('channels/{}'.format(channel_id))
-            return logger.log("deleted channels {}".format(channel_id))
+            logging.debug("deleted channels {}".format(channel_id))
 
     def delete_children(self):
         '''
         Method is used for deleting channels that are having children status.
-        Output: deleted children channel
+        Output: log with information about deleted children channel
         '''
         channels_data = self.channels_detailed_information()
         children_list = self.list_of_children()
@@ -104,8 +103,8 @@ class ChannelsMaintanance(object):
                         cid]["channel_topic"] != 'protected' or 'Default Channel has no topic' and channels_data[
                             cid]["channel_topic"] == 'quarantine':
                     requests.delete('{}/channels/{}'.format(
-                        self.connection, cid), auth=(self.username, self.password))
-                    return logging.log("deleted children channel {}".format(cid))
+                        self.endpoint, cid), auth=(self.username, self.password))
+                    logging.debug("deleted children channel {}".format(cid))
 
     def list_of_children(self):
         '''
@@ -118,5 +117,3 @@ class ChannelsMaintanance(object):
                 if channels_data[channel_id]["pid"] == cid:
                     child_list.append(channel_id)
         return child_list
-
-
