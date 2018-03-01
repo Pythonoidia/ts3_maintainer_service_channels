@@ -15,20 +15,20 @@ class ChannelsMaintanance(object):
                 we are deleting this channel
         '''
         self.qtime = from_days_to_seconds(qtime)
-        self.endpoint = configuration.url
+        self.url = configuration.url
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
 
     def _requests_get(self, endpoint):
         return requests.get('{}{}'.format(
-            self.endpoint, endpoint), auth=(self.username, self.password)).json()
+            self.url, endpoint), auth=(self.username, self.password)).json()
 
     def _requests_delete(self, endpoint):
         requests.delete('{}{}'.format(
-            self.endpoint, endpoint), auth=(self.username, self.password))
+            self.url, endpoint), auth=(self.username, self.password))
 
     def _requests_post(self, endpoint, payload):
-        requests.post('{}{}'.format(self.endpoint, endpoint), auth=(
+        requests.post('{}{}'.format(self.url, endpoint), auth=(
             self.username, self.password), data=payload)
 
     def channels_basic_info(self):
@@ -81,29 +81,25 @@ class ChannelsMaintanance(object):
         Method is used to delete channels that are parents to other channels.
         We are using this method after delete_children because it deletes
         children of parent as well.
-        Output: short information which parent channels were deleted.
         '''
         channels_data = self.channels_detailed_information()
         for channel_id in channels_data:
             channel = channels_data[channel_id]
-            if channel["channel_topic"] != 'protected' and channel["channel_topic"] == 'quarantine' and int(channel["seconds_empty"]) > self.qtime:
+            if not 'protected' in channel["channel_topic"] and 'quarantine' in channel["channel_topic"] and int(channel["seconds_empty"]) > self.qtime:
                 self._requests_delete('channels/{}'.format(channel_id))
-            logging.debug("deleted channels {}".format(channel_id))
+            logging.debug("deleted channel {}".format(channel_id))
 
     def delete_children(self):
         '''
         Method is used for deleting channels that are having children status.
-        Output: log with information about deleted children channel
         '''
         channels_data = self.channels_detailed_information()
         children_list = self.list_of_children()
         for cid in channels_data:
             if cid in children_list:
-                if int(channels_data[cid]["seconds_empty"]) > self.qtime and channels_data[
-                        cid]["channel_topic"] != 'protected' or 'Default Channel has no topic' and channels_data[
-                            cid]["channel_topic"] == 'quarantine':
+                if not 'protected' in channels_data[cid]["channel_topic"] and 'quarantine' in channels_data[cid]["channel_topic"] and int(channels_data[cid]["seconds_empty"]) > self.qtime:
                     requests.delete('{}/channels/{}'.format(
-                        self.endpoint, cid), auth=(self.username, self.password))
+                        self.url, cid), auth=(self.username, self.password))
                     logging.debug("deleted children channel {}".format(cid))
 
     def list_of_children(self):
@@ -117,3 +113,12 @@ class ChannelsMaintanance(object):
                 if channels_data[channel_id]["pid"] == cid:
                     child_list.append(channel_id)
         return child_list
+
+def main():
+    channels = ChannelsMaintanance()
+    channels.delete_parents()
+    channels.delete_children()
+
+if __name__ == "__main__":
+    main()
+
