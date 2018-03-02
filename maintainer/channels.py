@@ -14,7 +14,8 @@ class ChannelsMaintanance(object):
                 second - after same amount of time if channel_topic is quarantined
                 we are deleting this channel
         '''
-        self.qtime = from_days_to_seconds(qtime)
+        #self.qtime = from_days_to_seconds(qtime)
+        self.qtime = qtime
         self.url = configuration.url
         self.password = configuration.auth_pwd
         self.username = configuration.auth_user
@@ -70,8 +71,8 @@ class ChannelsMaintanance(object):
         channels_detailed_info = self.channels_detailed_information()
         for channel_id in channels_detailed_info:
             channel = channels_detailed_info[channel_id]
-            if int(channel["seconds_empty"]) > self.qtime and channel[
-                    "channel_topic"] != 'protected':
+            if int(channel["seconds_empty"]) > self.qtime and 'protected' not in channel[
+                    "channel_topic"]:
                 payload = {'channel_topic': 'quarantine'}
                 self._requests_post('channels/{}/topic'.format(channel_id), payload)
                 logging.debug("quarantined channel: {}".format(channel_id))
@@ -85,7 +86,7 @@ class ChannelsMaintanance(object):
         channels_data = self.channels_detailed_information()
         for channel_id in channels_data:
             channel = channels_data[channel_id]
-            if not 'protected' in channel["channel_topic"] and 'quarantine' in channel["channel_topic"] and int(channel["seconds_empty"]) > self.qtime:
+            if 'protected' not in channel["channel_topic"] and int(channel["seconds_empty"]) > self.qtime and 'quarantine' in channel["channel_topic"]:
                 self._requests_delete('channels/{}'.format(channel_id))
             logging.debug("deleted channel {}".format(channel_id))
 
@@ -97,7 +98,7 @@ class ChannelsMaintanance(object):
         children_list = self.list_of_children()
         for cid in channels_data:
             if cid in children_list:
-                if not 'protected' in channels_data[cid]["channel_topic"] and 'quarantine' in channels_data[cid]["channel_topic"] and int(channels_data[cid]["seconds_empty"]) > self.qtime:
+                if 'protected' not in channels_data[cid]["channel_topic"] and int(channels_data[cid]["seconds_empty"]) > self.qtime and 'quarantine' in channels_data[cid]["channel_topic"]:
                     requests.delete('{}/channels/{}'.format(
                         self.url, cid), auth=(self.username, self.password))
                     logging.debug("deleted children channel {}".format(cid))
@@ -116,8 +117,9 @@ class ChannelsMaintanance(object):
 
 def main():
     channels = ChannelsMaintanance()
-    channels.delete_parents()
-    channels.delete_children()
+    channels.channels_to_quarantine()
+    print(channels.delete_parents())
+    print(channels.delete_children())
 
 if __name__ == "__main__":
     main()
